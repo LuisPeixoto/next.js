@@ -567,6 +567,14 @@ function upstreamTimedOut(href: string): ImageError {
   )
 }
 
+function upstreamRequestFailed(href: string, err: unknown): ImageError {
+  Log.error('upstream image request failed for', href, err)
+  return new ImageError(
+    502,
+    '"url" parameter is valid but upstream request failed'
+  )
+}
+
 const agentOptions = {
   keepAlive: true,
   timeout: 7_000,
@@ -828,7 +836,9 @@ export async function fetchExternalImage(
       // A literal address is connected to as-is, without any DNS resolution
       addresses = [{ address: hostname, family: literalFamily }]
     } else {
-      addresses = await lookupAsSocketWould(hostname)
+      addresses = await lookupAsSocketWould(hostname).catch((err) => {
+        throw upstreamRequestFailed(href, err)
+      })
       pinnedLookup = createPinnedLookup(hostname, addresses)
     }
     imageLookupKey = addresses
@@ -869,7 +879,7 @@ export async function fetchExternalImage(
     if (signal.aborted) {
       throw upstreamTimedOut(href)
     }
-    throw err
+    throw upstreamRequestFailed(href, err)
   }
 
   const statusCode = res.statusCode
